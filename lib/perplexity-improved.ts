@@ -1,0 +1,496 @@
+import { UserPreferences, VacationRecommendation } from '@/types'
+import { z } from 'zod'
+
+// Schema for validating a single destination
+const DestinationSchema = z.object({
+  destination: z.string().min(1),
+  country: z.string().min(1),
+  description: z.string().min(1),
+  estimatedCost: z.object({
+    total: z.number().min(0),
+    breakdown: z.object({
+      accommodation: z.number().min(0),
+      transportation: z.number().min(0),
+      food: z.number().min(0),
+      activities: z.number().min(0),
+    })
+  }),
+  highlights: z.array(z.string()).min(1),
+  activities: z.array(z.object({
+    name: z.string().min(1),
+    description: z.string().min(1),
+    duration: z.string().min(1),
+    cost: z.number().min(0),
+    type: z.string().min(1)
+  })).min(1),
+  accommodations: z.array(z.object({
+    name: z.string().min(1),
+    type: z.string().min(1),
+    pricePerNight: z.number().min(0),
+    amenities: z.array(z.string()),
+    sustainabilityFeatures: z.array(z.string())
+  })).min(1),
+  transportation: z.array(z.object({
+    mode: z.string().min(1),
+    carbonEmissions: z.number().min(0),
+    cost: z.number().min(0),
+    duration: z.string().min(1)
+  })).min(1),
+  sustainabilityScore: z.object({
+    overall: z.number().min(0).max(10),
+    description: z.string().min(1),
+    tips: z.array(z.string())
+  }),
+  weather: z.object({
+    temperature: z.object({
+      min: z.number(),
+      max: z.number()
+    }),
+    conditions: z.string().min(1),
+    bestMonths: z.array(z.string()).min(1)
+  }),
+  localCuisine: z.array(z.string()).min(1),
+  culturalTips: z.array(z.string()).min(1),
+  imageUrl: z.string().url().optional()
+})
+
+const DestinationsArraySchema = z.array(DestinationSchema).min(3).max(3)
+
+export async function generateVacationRecommendations(
+  preferences: UserPreferences
+): Promise<VacationRecommendation[]> {
+  const maxAttempts = 3
+  let lastError = ''
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const prompt = buildImprovedPrompt(preferences, attempt)
+      
+      const response = await fetch('/api/perplexity', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      const result = parseAndValidateResponse(data.content, preferences)
+      
+      if (result) {
+        console.log(`[Perplexity] Success on attempt ${attempt}`)
+        return result
+      }
+      
+      lastError = 'Invalid response format'
+    } catch (error: any) {
+      lastError = error.message
+      console.error(`[Perplexity] Attempt ${attempt} failed:`, error.message)
+    }
+    
+    // Wait before retry with exponential backoff
+    if (attempt < maxAttempts) {
+      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 3000)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+  }
+  
+  console.warn('[Perplexity] All attempts failed, using mock data. Last error:', lastError)
+  return getMockRecommendations(preferences)
+}
+
+function buildImprovedPrompt(preferences: UserPreferences, attemptNumber: number): string {
+  const { budget, duration, tripType, accommodationType, activities, pace, climate, sustainability, specialInstructions } = preferences
+  const budgetStr = `${budget.currency} ${budget.min}-${budget.max}`
+  
+  // Use the most explicit prompt that works best
+  let prompt = `You are a JSON-only API. Return ONLY a valid JSON array with exactly 3 vacation destinations.
+
+CRITICAL: Your ENTIRE response must be valid JSON starting with [ and ending with ]
+- Do NOT include any text before the [
+- Do NOT include any text after the ]
+- Do NOT use markdown formatting
+- Do NOT include explanations
+
+Generate 3 vacation recommendations for:
+- Budget: ${budgetStr}
+- Duration: ${duration.days} days
+- Trip Type: ${tripType}
+- Accommodation: ${accommodationType}
+- Activities: ${activities.join(', ')}
+- Pace: ${pace}
+- Climate: ${climate}
+- Sustainability: ${sustainability}`
+
+  if (specialInstructions) {
+    prompt += `\n- Special Instructions: ${specialInstructions}`
+  }
+
+  prompt += `
+
+Return this EXACT structure with 3 destinations:
+[
+  {
+    "destination": "City Name",
+    "country": "Country Name",
+    "description": "Detailed description of why this destination matches the preferences",
+    "estimatedCost": {
+      "total": ${Math.floor((budget.min + budget.max) / 2)},
+      "breakdown": {
+        "accommodation": ${Math.floor(((budget.min + budget.max) / 2) * 0.3)},
+        "transportation": ${Math.floor(((budget.min + budget.max) / 2) * 0.25)},
+        "food": ${Math.floor(((budget.min + budget.max) / 2) * 0.25)},
+        "activities": ${Math.floor(((budget.min + budget.max) / 2) * 0.2)}
+      }
+    },
+    "highlights": ["Attraction 1", "Attraction 2", "Attraction 3", "Attraction 4", "Attraction 5"],
+    "activities": [
+      {
+        "name": "Activity Name",
+        "description": "What you'll do",
+        "duration": "2 hours",
+        "cost": 50,
+        "type": "adventure"
+      },
+      {
+        "name": "Another Activity",
+        "description": "Description",
+        "duration": "Half day",
+        "cost": 75,
+        "type": "culture"
+      }
+    ],
+    "accommodations": [
+      {
+        "name": "Hotel Name",
+        "type": "${accommodationType}",
+        "pricePerNight": ${Math.floor(((budget.min + budget.max) / 2) * 0.3 / duration.days)},
+        "amenities": ["WiFi", "Pool", "Restaurant"],
+        "sustainabilityFeatures": ["Solar Power", "Water Conservation"]
+      }
+    ],
+    "transportation": [
+      {
+        "mode": "Public Transit",
+        "carbonEmissions": 5,
+        "cost": 20,
+        "duration": "30 minutes average"
+      }
+    ],
+    "sustainabilityScore": {
+      "overall": 7,
+      "description": "Good eco-friendly infrastructure",
+      "tips": ["Use public transport", "Support local businesses"]
+    },
+    "weather": {
+      "temperature": {"min": 20, "max": 30},
+      "conditions": "Pleasant climate",
+      "bestMonths": ["May", "June", "September"]
+    },
+    "localCuisine": ["Local Dish 1", "Local Dish 2", "Local Dish 3"],
+    "culturalTips": ["Cultural Tip 1", "Cultural Tip 2", "Cultural Tip 3"],
+    "imageUrl": "https://images.unsplash.com/photo-example?w=800&q=80"
+  }
+]
+
+START WITH [ AND END WITH ]`
+  
+  return prompt
+}
+
+function sanitizeResponse(rawResponse: string): string | null {
+  let cleaned = rawResponse.trim()
+  
+  // Remove markdown blocks
+  cleaned = cleaned.replace(/^```json\s*/i, '').replace(/\s*```$/i, '')
+  cleaned = cleaned.replace(/^```\s*/i, '').replace(/\s*```$/i, '')
+  
+  // Remove common prefixes
+  const prefixPatterns = [
+    /^Here (?:is|are) (?:the |your |3 |three )?(?:vacation |)recommendations?:?\s*/i,
+    /^I've generated (?:the |)?(?:3 |three |)?recommendations?:?\s*/i,
+    /^Based on your preferences.*?:\s*/i,
+    /^Here's the JSON array.*?:\s*/i,
+  ]
+  
+  for (const pattern of prefixPatterns) {
+    cleaned = cleaned.replace(pattern, '')
+  }
+  
+  // Find JSON array boundaries
+  const firstBracket = cleaned.indexOf('[')
+  const lastBracket = cleaned.lastIndexOf(']')
+  
+  if (firstBracket >= 0 && lastBracket > firstBracket) {
+    cleaned = cleaned.substring(firstBracket, lastBracket + 1)
+  } else {
+    return null
+  }
+  
+  // Fix common JSON syntax errors
+  cleaned = cleaned
+    .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+    .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+    .replace(/}\s*{/g, '},{') // Add commas between adjacent objects
+  
+  return cleaned
+}
+
+function parseAndValidateResponse(
+  content: string, 
+  preferences: UserPreferences
+): VacationRecommendation[] | null {
+  try {
+    // Sanitize the response
+    const sanitized = sanitizeResponse(content)
+    if (!sanitized) {
+      console.error('[Perplexity] Failed to extract JSON from response')
+      return null
+    }
+    
+    // Parse JSON
+    let parsed: any
+    try {
+      parsed = JSON.parse(sanitized)
+    } catch (parseError: any) {
+      console.error('[Perplexity] JSON parse error:', parseError.message)
+      return null
+    }
+    
+    // Validate with Zod (relaxed validation for production)
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      console.error('[Perplexity] Response is not an array or is empty')
+      return null
+    }
+    
+    // Convert to our format with defaults for missing fields
+    const recommendations: VacationRecommendation[] = parsed.slice(0, 3).map((item: any, index: number) => ({
+      id: (index + 1).toString(),
+      destination: item.destination || 'Unknown Destination',
+      country: item.country || 'Unknown Country',
+      duration: preferences.duration.days,
+      estimatedCost: {
+        total: item.estimatedCost?.total || Math.floor((preferences.budget.min + preferences.budget.max) / 2),
+        breakdown: {
+          accommodation: item.estimatedCost?.breakdown?.accommodation || 0,
+          transportation: item.estimatedCost?.breakdown?.transportation || 0,
+          food: item.estimatedCost?.breakdown?.food || 0,
+          activities: item.estimatedCost?.breakdown?.activities || 0,
+        }
+      },
+      description: item.description || 'A wonderful destination for your vacation.',
+      highlights: Array.isArray(item.highlights) ? item.highlights.slice(0, 5) : ['Local attractions'],
+      activities: Array.isArray(item.activities) ? item.activities.slice(0, 5).map((act: any) => ({
+        name: act.name || 'Activity',
+        description: act.description || 'Enjoyable activity',
+        duration: act.duration || 'Varies',
+        cost: act.cost || 0,
+        type: act.type || 'general',
+        sustainabilityRating: act.sustainabilityRating || 7
+      })) : [{
+        name: 'Explore the area',
+        description: 'Discover local attractions',
+        duration: 'Full day',
+        cost: 50,
+        type: 'exploration',
+        sustainabilityRating: 8
+      }],
+      accommodations: Array.isArray(item.accommodations) ? item.accommodations.slice(0, 2).map((acc: any) => ({
+        name: acc.name || 'Accommodation',
+        type: acc.type || preferences.accommodationType,
+        pricePerNight: acc.pricePerNight || 100,
+        amenities: Array.isArray(acc.amenities) ? acc.amenities : ['Basic amenities'],
+        sustainabilityFeatures: Array.isArray(acc.sustainabilityFeatures) ? acc.sustainabilityFeatures : [],
+        rating: acc.rating || 4.0
+      })) : [{
+        name: 'Recommended Stay',
+        type: preferences.accommodationType,
+        pricePerNight: 100,
+        amenities: ['WiFi', 'Breakfast'],
+        sustainabilityFeatures: ['Eco-friendly'],
+        rating: 4.5
+      }],
+      transportation: Array.isArray(item.transportation) ? item.transportation.map((trans: any) => ({
+        mode: trans.mode || 'Various',
+        carbonEmissions: trans.carbonEmissions || 10,
+        cost: trans.cost || 20,
+        duration: trans.duration || 'Varies'
+      })) : [{
+        mode: 'Public Transit',
+        carbonEmissions: 5,
+        cost: 20,
+        duration: '30 minutes average'
+      }],
+      sustainabilityScore: {
+        overall: item.sustainabilityScore?.overall || 7,
+        transportation: item.sustainabilityScore?.transportation || 7,
+        accommodation: item.sustainabilityScore?.accommodation || 7,
+        activities: item.sustainabilityScore?.activities || 7,
+        localImpact: item.sustainabilityScore?.localImpact || 7,
+        description: item.sustainabilityScore?.description || 'Good sustainability practices',
+        tips: Array.isArray(item.sustainabilityScore?.tips) ? item.sustainabilityScore.tips : ['Support local businesses']
+      },
+      weather: {
+        temperature: {
+          min: item.weather?.temperature?.min || 20,
+          max: item.weather?.temperature?.max || 30
+        },
+        conditions: item.weather?.conditions || 'Pleasant weather',
+        bestMonths: Array.isArray(item.weather?.bestMonths) ? item.weather.bestMonths : ['Year-round']
+      },
+      localCuisine: Array.isArray(item.localCuisine) ? item.localCuisine : ['Local specialties'],
+      culturalTips: Array.isArray(item.culturalTips) ? item.culturalTips : ['Be respectful of local customs'],
+      images: item.imageUrl ? [item.imageUrl] : ['https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80']
+    }))
+    
+    console.log(`[Perplexity] Successfully parsed ${recommendations.length} destinations`)
+    return recommendations
+    
+  } catch (error: any) {
+    console.error('[Perplexity] Error processing response:', error.message)
+    return null
+  }
+}
+
+// Keep the existing mock recommendations function
+function getMockRecommendations(preferences: UserPreferences): VacationRecommendation[] {
+  // ... (keep the existing mock recommendations code from the original file)
+  const mockDestinations = [
+    {
+      id: '1',
+      destination: 'Bali',
+      country: 'Indonesia',
+      duration: preferences.duration.days,
+      estimatedCost: {
+        total: Math.floor((preferences.budget.min + preferences.budget.max) / 2),
+        breakdown: {
+          accommodation: Math.floor(((preferences.budget.min + preferences.budget.max) / 2) * 0.3),
+          transportation: Math.floor(((preferences.budget.min + preferences.budget.max) / 2) * 0.25),
+          food: Math.floor(((preferences.budget.min + preferences.budget.max) / 2) * 0.25),
+          activities: Math.floor(((preferences.budget.min + preferences.budget.max) / 2) * 0.2),
+        }
+      },
+      description: 'Experience the perfect blend of stunning beaches, ancient temples, and lush rice terraces in this tropical paradise.',
+      highlights: ['Ubud Rice Terraces', 'Tanah Lot Temple', 'Seminyak Beach', 'Mount Batur', 'Traditional Markets'],
+      activities: [
+        { name: 'Surfing Lesson', description: 'Learn to surf', duration: '2 hours', cost: 50, type: 'adventure', sustainabilityRating: 9 },
+        { name: 'Temple Tour', description: 'Visit ancient temples', duration: 'Full day', cost: 80, type: 'culture', sustainabilityRating: 8 }
+      ],
+      accommodations: [
+        { name: 'Eco Villa', type: 'Resort', pricePerNight: 120, amenities: ['Pool', 'WiFi'], sustainabilityFeatures: ['Solar Power'], rating: 4.8 }
+      ],
+      transportation: [
+        { mode: 'Scooter', carbonEmissions: 5, cost: 20, duration: 'Per day' }
+      ],
+      sustainabilityScore: {
+        overall: 8,
+        transportation: 7,
+        accommodation: 9,
+        activities: 8,
+        localImpact: 8,
+        description: 'Excellent eco-friendly options',
+        tips: ['Use refillable water bottles', 'Support local businesses']
+      },
+      weather: {
+        temperature: { min: 25, max: 32 },
+        conditions: 'Tropical climate',
+        bestMonths: ['April', 'May', 'September', 'October']
+      },
+      localCuisine: ['Nasi Goreng', 'Satay', 'Babi Guling'],
+      culturalTips: ['Dress modestly at temples', 'Remove shoes before entering homes'],
+      images: ['https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80']
+    },
+    {
+      id: '2',
+      destination: 'Santorini',
+      country: 'Greece',
+      duration: preferences.duration.days,
+      estimatedCost: {
+        total: Math.floor((preferences.budget.min + preferences.budget.max) / 2 * 1.2),
+        breakdown: {
+          accommodation: Math.floor(((preferences.budget.min + preferences.budget.max) / 2 * 1.2) * 0.35),
+          transportation: Math.floor(((preferences.budget.min + preferences.budget.max) / 2 * 1.2) * 0.2),
+          food: Math.floor(((preferences.budget.min + preferences.budget.max) / 2 * 1.2) * 0.25),
+          activities: Math.floor(((preferences.budget.min + preferences.budget.max) / 2 * 1.2) * 0.2),
+        }
+      },
+      description: 'Discover iconic white-washed buildings and blue-domed churches perched on dramatic cliffs.',
+      highlights: ['Oia Sunset', 'Red Beach', 'Ancient Akrotiri', 'Wine Tasting', 'Caldera Views'],
+      activities: [
+        { name: 'Catamaran Cruise', description: 'Sail the caldera', duration: '5 hours', cost: 120, type: 'scenic', sustainabilityRating: 7 }
+      ],
+      accommodations: [
+        { name: 'Cave Hotel', type: 'Boutique Hotel', pricePerNight: 200, amenities: ['View', 'Pool'], sustainabilityFeatures: [], rating: 4.9 }
+      ],
+      transportation: [
+        { mode: 'Bus', carbonEmissions: 3, cost: 5, duration: 'Per trip' }
+      ],
+      sustainabilityScore: {
+        overall: 7,
+        transportation: 6,
+        accommodation: 8,
+        activities: 7,
+        localImpact: 7,
+        description: 'Growing eco-friendly options',
+        tips: ['Use public transport', 'Visit in shoulder season']
+      },
+      weather: {
+        temperature: { min: 20, max: 28 },
+        conditions: 'Mediterranean climate',
+        bestMonths: ['May', 'June', 'September']
+      },
+      localCuisine: ['Fava', 'Fresh Seafood', 'Greek Salad'],
+      culturalTips: ['Respect photo restrictions', 'Siesta time 2-5 PM'],
+      images: ['https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=800&q=80']
+    },
+    {
+      id: '3',
+      destination: 'Kyoto',
+      country: 'Japan',
+      duration: preferences.duration.days,
+      estimatedCost: {
+        total: Math.floor((preferences.budget.min + preferences.budget.max) / 2 * 1.1),
+        breakdown: {
+          accommodation: Math.floor(((preferences.budget.min + preferences.budget.max) / 2 * 1.1) * 0.3),
+          transportation: Math.floor(((preferences.budget.min + preferences.budget.max) / 2 * 1.1) * 0.2),
+          food: Math.floor(((preferences.budget.min + preferences.budget.max) / 2 * 1.1) * 0.3),
+          activities: Math.floor(((preferences.budget.min + preferences.budget.max) / 2 * 1.1) * 0.2),
+        }
+      },
+      description: 'Step into Japan\'s cultural heart with thousands of temples and traditional gardens.',
+      highlights: ['Fushimi Inari', 'Bamboo Grove', 'Golden Pavilion', 'Geisha District'],
+      activities: [
+        { name: 'Temple Tour', description: 'Visit iconic temples', duration: 'Full day', cost: 60, type: 'culture', sustainabilityRating: 9 }
+      ],
+      accommodations: [
+        { name: 'Ryokan', type: 'Traditional Inn', pricePerNight: 180, amenities: ['Onsen', 'Meals'], sustainabilityFeatures: ['Traditional'], rating: 4.8 }
+      ],
+      transportation: [
+        { mode: 'Bicycle', carbonEmissions: 0, cost: 15, duration: 'Per day' }
+      ],
+      sustainabilityScore: {
+        overall: 9,
+        transportation: 10,
+        accommodation: 8,
+        activities: 9,
+        localImpact: 9,
+        description: 'Excellent sustainable tourism',
+        tips: ['Use bicycles', 'Respect temple rules']
+      },
+      weather: {
+        temperature: { min: 15, max: 25 },
+        conditions: 'Four distinct seasons',
+        bestMonths: ['March', 'April', 'November']
+      },
+      localCuisine: ['Kaiseki', 'Tofu Dishes', 'Matcha'],
+      culturalTips: ['Remove shoes in temples', 'No tipping'],
+      images: ['https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80']
+    }
+  ]
+  
+  return mockDestinations
+}

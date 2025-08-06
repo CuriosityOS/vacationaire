@@ -5,10 +5,35 @@ import { MapPin, Calendar, DollarSign, Users, Thermometer, Camera, Coffee, Plane
 import { VacationRecommendation } from '@/types'
 import SustainabilityBadge from './SustainabilityBadge'
 import Image from 'next/image'
+import { useState } from 'react'
 
 interface ResultsProps {
   recommendations: VacationRecommendation[];
   onRestart: () => void;
+}
+
+function DestinationImage({ destination, country, imageUrl }: { destination: string; country: string; imageUrl?: string }) {
+  const [imageError, setImageError] = useState(false);
+  
+  if (!imageUrl || imageError) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center">
+        <MapPin className="w-24 h-24 text-beige-400 opacity-50" />
+      </div>
+    );
+  }
+  
+  return (
+    <Image 
+      src={imageUrl} 
+      alt={`${destination}, ${country}`}
+      fill
+      className="object-cover"
+      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+      onError={() => setImageError(true)}
+      unoptimized
+    />
+  );
 }
 
 export default function Results({ recommendations, onRestart }: ResultsProps) {
@@ -38,19 +63,11 @@ export default function Results({ recommendations, onRestart }: ResultsProps) {
               className="card hover:shadow-xl transition-shadow duration-300"
             >
               <div className="relative h-64 -mx-6 -mt-6 mb-6 rounded-t-2xl overflow-hidden bg-gradient-to-br from-beige-200 to-sand-200">
-                {rec.images && rec.images[0] ? (
-                  <Image 
-                    src={rec.images[0]} 
-                    alt={`${rec.destination}, ${rec.country}`}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <MapPin className="w-24 h-24 text-beige-400 opacity-50" />
-                  </div>
-                )}
+                <DestinationImage 
+                  destination={rec.destination}
+                  country={rec.country}
+                  imageUrl={rec.images?.[0]}
+                />
                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/50 to-transparent">
                   <h2 className="text-3xl font-bold text-white">{rec.destination}</h2>
                   <p className="text-lg text-white/90">{rec.country}</p>

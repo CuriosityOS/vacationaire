@@ -1,0 +1,91 @@
+#!/usr/bin/env tsx
+
+import { PerplexityClient } from './perplexity-client'
+import { UserPreferences } from '@/types'
+import * as dotenv from 'dotenv'
+import * as path from 'path'
+
+// Load environment variables
+dotenv.config({ path: path.join(__dirname, '..', '.env.local') })
+
+async function quickTest() {
+  const apiKey = process.env.PERPLEXITY_API_KEY
+  
+  if (!apiKey) {
+    console.error('❌ PERPLEXITY_API_KEY not found')
+    process.exit(1)
+  }
+
+  console.log('🚀 Starting quick test with sonar model')
+  console.log(`🔑 API Key: ${apiKey.substring(0, 10)}...`)
+  
+  const client = new PerplexityClient(apiKey, 'sonar', 3, true)
+  
+  const testPreferences: UserPreferences = {
+    budget: {
+      min: 2000,
+      max: 5000,
+      currency: 'USD'
+    },
+    duration: {
+      days: 7,
+      flexibility: 'flexible'
+    },
+    tripType: 'adventure',
+    accommodationType: 'hotel',
+    activities: ['hiking', 'water sports', 'wildlife', 'photography', 'local cuisine'],
+    pace: 'moderate',
+    climate: 'tropical',
+    sustainability: 'medium',
+    specialInstructions: ''
+  }
+  
+  console.log('\n📋 Test preferences:')
+  console.log(`  Budget: $${testPreferences.budget.min}-${testPreferences.budget.max}`)
+  console.log(`  Duration: ${testPreferences.duration.days} days`)
+  console.log(`  Type: ${testPreferences.tripType}`)
+  console.log(`  Climate: ${testPreferences.climate}`)
+  
+  console.log('\n🔄 Sending request to Perplexity API...')
+  
+  const result = await client.generateRecommendations(testPreferences)
+  
+  if (result.success) {
+    console.log(`\n✅ SUCCESS after ${result.attempts} attempt(s)!`)
+    console.log(`\n📍 Generated ${result.data?.length} destinations:`)
+    result.data?.forEach((dest, i) => {
+      console.log(`\n  ${i + 1}. ${dest.destination}, ${dest.country}`)
+      console.log(`     💰 Total Cost: $${dest.estimatedCost.total}`)
+      console.log(`     📝 ${dest.description.substring(0, 100)}...`)
+      console.log(`     🌟 Highlights: ${dest.highlights.slice(0, 3).join(', ')}`)
+      console.log(`     🌱 Sustainability: ${dest.sustainabilityScore.overall}/10`)
+    })
+    
+    console.log('\n🎉 Test passed! The system successfully generated valid JSON recommendations.')
+  } else {
+    console.log(`\n❌ FAILED after ${result.attempts} attempts`)
+    console.log(`   Error: ${result.error}`)
+    
+    if (result.rawResponse) {
+      console.log(`\n📄 Raw response preview (first 500 chars):`)
+      console.log(result.rawResponse.substring(0, 500))
+    }
+    
+    if (result.sanitizedResponse) {
+      console.log(`\n🧹 Sanitized response preview (first 500 chars):`)
+      console.log(result.sanitizedResponse.substring(0, 500))
+    }
+    
+    console.log('\n💡 Debugging suggestions:')
+    console.log('   1. Check if the API key is valid')
+    console.log('   2. Try adjusting the prompt in perplexity-client.ts')
+    console.log('   3. Check the Perplexity API status')
+    console.log('   4. Review the raw response for clues')
+  }
+}
+
+// Run the test
+quickTest().catch(error => {
+  console.error('Fatal error:', error)
+  process.exit(1)
+})

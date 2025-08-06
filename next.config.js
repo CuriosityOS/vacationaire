@@ -13,6 +13,14 @@ const nextConfig = {
         hostname: 'images.pexels.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+      {
+        protocol: 'http',
+        hostname: '**',
+      },
     ],
   },
 }
