@@ -344,7 +344,7 @@ function parseAndValidateResponse(
       },
       localCuisine: Array.isArray(item.localCuisine) ? item.localCuisine : ['Local specialties'],
       culturalTips: Array.isArray(item.culturalTips) ? item.culturalTips : ['Be respectful of local customs'],
-      images: item.imageUrl ? [item.imageUrl] : ['https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80']
+      images: [] // Removing images as they're not reliably provided by the API
     }))
     
     console.log(`[Perplexity] Successfully parsed ${recommendations.length} destinations`)

@@ -15,24 +15,12 @@ interface ResultsProps {
 function DestinationImage({ destination, country, imageUrl }: { destination: string; country: string; imageUrl?: string }) {
   const [imageError, setImageError] = useState(false);
   
-  if (!imageUrl || imageError) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center">
-        <MapPin className="w-24 h-24 text-beige-400 opacity-50" />
-      </div>
-    );
-  }
-  
+  // Always show the placeholder design for now since API doesn't provide reliable images
   return (
-    <Image 
-      src={imageUrl} 
-      alt={`${destination}, ${country}`}
-      fill
-      className="object-cover"
-      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-      onError={() => setImageError(true)}
-      unoptimized
-    />
+    <div className="absolute inset-0 flex flex-col items-center justify-center">
+      <MapPin className="w-20 h-20 text-beige-500 opacity-60 mb-2" />
+      <p className="text-beige-600 text-sm font-medium opacity-80">Explore {destination}</p>
+    </div>
   );
 }
 
@@ -62,15 +50,15 @@ export default function Results({ recommendations, onRestart }: ResultsProps) {
               transition={{ delay: index * 0.1 }}
               className="card hover:shadow-xl transition-shadow duration-300"
             >
-              <div className="relative h-64 -mx-6 -mt-6 mb-6 rounded-t-2xl overflow-hidden bg-gradient-to-br from-beige-200 to-sand-200">
+              <div className="relative h-64 -mx-6 -mt-6 mb-6 rounded-t-2xl overflow-hidden bg-gradient-to-br from-sand-200 via-beige-200 to-orange-100">
                 <DestinationImage 
                   destination={rec.destination}
                   country={rec.country}
                   imageUrl={rec.images?.[0]}
                 />
-                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/50 to-transparent">
-                  <h2 className="text-3xl font-bold text-white">{rec.destination}</h2>
-                  <p className="text-lg text-white/90">{rec.country}</p>
+                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-beige-800/80 via-beige-800/40 to-transparent">
+                  <h2 className="text-3xl font-bold text-white drop-shadow-lg">{rec.destination}</h2>
+                  <p className="text-lg text-white/90 drop-shadow">{rec.country}</p>
                 </div>
               </div>
 
