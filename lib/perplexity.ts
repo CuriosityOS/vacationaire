@@ -83,7 +83,9 @@ export async function generateVacationRecommendations(
       
       if (result) {
         console.log(`[Perplexity] Success on attempt ${attempt}`)
-        return result
+        // Add geocoding for each destination
+        const geocodedResults = await addCoordinatesToRecommendations(result)
+        return geocodedResults
       }
       
       lastError = 'Invalid response format'
@@ -355,6 +357,104 @@ function parseAndValidateResponse(
     
   } catch (error: any) {
     console.error('[Perplexity] Error processing response:', error.message)
+    return null
+  }
+}
+
+// Add coordinates to recommendations by geocoding each destination
+async function addCoordinatesToRecommendations(
+  recommendations: VacationRecommendation[]
+): Promise<VacationRecommendation[]> {
+  console.log('[Geocoding] Adding coordinates to recommendations...')
+  
+  // Check if we're in a browser environment
+  const isClient = typeof window !== 'undefined'
+  
+  // Process geocoding requests in parallel for better performance
+  const geocodedRecommendations = await Promise.all(
+    recommendations.map(async (rec) => {
+      try {
+        if (isClient) {
+          // Client-side: use the API endpoint
+          const response = await fetch('/api/geocode', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              destination: rec.destination,
+              country: rec.country,
+            }),
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.coordinates) {
+              console.log(`[Geocoding] Found coordinates for ${rec.destination}: ${data.coordinates.latitude}, ${data.coordinates.longitude}`)
+              return {
+                ...rec,
+                coordinates: data.coordinates,
+              }
+            }
+          }
+        } else {
+          // Server-side: direct geocoding
+          const coordinates = await geocodeDestination(rec.destination, rec.country)
+          if (coordinates) {
+            console.log(`[Geocoding] Found coordinates for ${rec.destination}: ${coordinates.latitude}, ${coordinates.longitude}`)
+            return {
+              ...rec,
+              coordinates,
+            }
+          }
+        }
+        
+        console.log(`[Geocoding] No coordinates found for ${rec.destination}`)
+        return rec // Return without coordinates
+        
+      } catch (error) {
+        console.error(`[Geocoding] Error for ${rec.destination}:`, error)
+        return rec // Return without coordinates on error
+      }
+    })
+  )
+
+  return geocodedRecommendations
+}
+
+// Server-side geocoding function
+async function geocodeDestination(
+  destination: string,
+  country: string
+): Promise<{ latitude: number; longitude: number } | null> {
+  const MAPBOX_TOKEN = process.env.MAPBOX_ACCESS_TOKEN
+  
+  if (!MAPBOX_TOKEN || MAPBOX_TOKEN === 'your_mapbox_secret_token_here') {
+    return null
+  }
+
+  try {
+    const query = `${destination}, ${country}`
+    const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+      query
+    )}.json?access_token=${MAPBOX_TOKEN}&limit=1&types=place,locality,district`
+
+    const response = await fetch(endpoint)
+    
+    if (!response.ok) {
+      return null
+    }
+
+    const data = await response.json()
+
+    if (data.features && data.features.length > 0) {
+      const [longitude, latitude] = data.features[0].center
+      return { latitude, longitude }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Direct geocoding error:', error)
     return null
   }
 }

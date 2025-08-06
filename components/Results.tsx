@@ -4,6 +4,8 @@ import { motion } from 'framer-motion'
 import { MapPin, Calendar, DollarSign, Users, Thermometer, Camera, Coffee, Plane, Home, Star, RefreshCw } from 'lucide-react'
 import { VacationRecommendation } from '@/types'
 import SustainabilityBadge from './SustainabilityBadge'
+import DestinationMap from './DestinationMap'
+import ItineraryModal from './ItineraryModal'
 import Image from 'next/image'
 import { useState } from 'react'
 
@@ -12,16 +14,32 @@ interface ResultsProps {
   onRestart: () => void;
 }
 
-function DestinationImage({ destination, country, imageUrl }: { destination: string; country: string; imageUrl?: string }) {
+// Component to display either a map or image for the destination
+function DestinationVisual({ rec }: { rec: VacationRecommendation }) {
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
+  
+  // If we have coordinates, show the map
+  if (rec.coordinates) {
+    return (
+      <DestinationMap
+        latitude={rec.coordinates.latitude}
+        longitude={rec.coordinates.longitude}
+        destinationName={rec.destination}
+        zoom={11}
+      />
+    );
+  }
+  
+  // Otherwise, fall back to the image if available
+  const imageUrl = rec.images?.[0];
   
   // Show placeholder if no URL or if image failed to load
   if (!imageUrl || imageError) {
     return (
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-sand-200 via-beige-200 to-orange-100">
         <MapPin className="w-20 h-20 text-beige-500 opacity-60 mb-2" />
-        <p className="text-beige-600 text-sm font-medium opacity-80">Explore {destination}</p>
+        <p className="text-beige-600 text-sm font-medium opacity-80">Explore {rec.destination}</p>
       </div>
     );
   }
@@ -29,14 +47,14 @@ function DestinationImage({ destination, country, imageUrl }: { destination: str
   return (
     <>
       {imageLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-sand-200 via-beige-200 to-orange-100">
           <MapPin className="w-20 h-20 text-beige-500 opacity-60 mb-2 animate-pulse" />
           <p className="text-beige-600 text-sm font-medium opacity-80">Loading...</p>
         </div>
       )}
       <Image 
         src={imageUrl} 
-        alt={`${destination}, ${country}`}
+        alt={`${rec.destination}, ${rec.country}`}
         fill
         className={`object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -53,6 +71,20 @@ function DestinationImage({ destination, country, imageUrl }: { destination: str
 }
 
 export default function Results({ recommendations, onRestart }: ResultsProps) {
+  const [selectedRecommendation, setSelectedRecommendation] = useState<VacationRecommendation | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleViewItinerary = (recommendation: VacationRecommendation) => {
+    setSelectedRecommendation(recommendation);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    // Small delay before clearing the recommendation to allow exit animation
+    setTimeout(() => setSelectedRecommendation(null), 300);
+  };
+
   return (
     <div className="min-h-screen py-12 px-4">
       <div className="container mx-auto max-w-full px-6">
@@ -79,11 +111,7 @@ export default function Results({ recommendations, onRestart }: ResultsProps) {
               className="card hover:shadow-xl transition-shadow duration-300"
             >
               <div className="relative h-64 -mx-6 -mt-6 mb-6 rounded-t-2xl overflow-hidden bg-gradient-to-br from-sand-200 via-beige-200 to-orange-100">
-                <DestinationImage 
-                  destination={rec.destination}
-                  country={rec.country}
-                  imageUrl={rec.images?.[0]}
-                />
+                <DestinationVisual rec={rec} />
                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-beige-800/80 via-beige-800/40 to-transparent">
                   <h2 className="text-3xl font-bold text-white drop-shadow-lg">{rec.destination}</h2>
                   <p className="text-lg text-white/90 drop-shadow">{rec.country}</p>
@@ -173,6 +201,7 @@ export default function Results({ recommendations, onRestart }: ResultsProps) {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className="w-full btn-primary"
+                onClick={() => handleViewItinerary(rec)}
               >
                 View Full Itinerary
               </motion.button>
@@ -195,6 +224,13 @@ export default function Results({ recommendations, onRestart }: ResultsProps) {
           </button>
         </motion.div>
       </div>
+
+      {/* Itinerary Modal */}
+      <ItineraryModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        recommendation={selectedRecommendation}
+      />
     </div>
   )
 }

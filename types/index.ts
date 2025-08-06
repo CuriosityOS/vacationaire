@@ -34,6 +34,10 @@ export interface VacationRecommendation {
   id: string;
   destination: string;
   country: string;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
   duration: number;
   estimatedCost: {
     total: number;
