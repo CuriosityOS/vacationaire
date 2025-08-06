@@ -14,7 +14,7 @@ interface ResultsProps {
 export default function Results({ recommendations, onRestart }: ResultsProps) {
   return (
     <div className="min-h-screen py-12 px-4">
-      <div className="container mx-auto max-w-7xl">
+      <div className="container mx-auto max-w-full px-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -28,13 +28,13 @@ export default function Results({ recommendations, onRestart }: ResultsProps) {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
           {recommendations.map((rec, index) => (
             <motion.div
               key={rec.id}
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.2 }}
+              transition={{ delay: index * 0.1 }}
               className="card hover:shadow-xl transition-shadow duration-300"
             >
               <div className="relative h-64 -mx-6 -mt-6 mb-6 rounded-t-2xl overflow-hidden bg-gradient-to-br from-beige-200 to-sand-200">

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'sonar-pro',
+        model: 'sonar',
         messages: [
           {
             role: 'system',
@@ -87,9 +87,9 @@ export async function POST(request: NextRequest) {
       } else {
         console.log(`[Perplexity API] Successfully validated ${parsed.length} destinations`)
       }
-    } catch (parseError) {
+    } catch (parseError: any) {
       console.error('[Perplexity API] PARSING FAILED: Response is not valid JSON')
-      console.error('[Perplexity API] Parse error:', parseError.message)
+      console.error('[Perplexity API] Parse error:', parseError?.message || String(parseError))
       console.error('[Perplexity API] Full raw output that failed to parse:', aiContent)
     }
     
