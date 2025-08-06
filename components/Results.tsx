@@ -14,13 +14,41 @@ interface ResultsProps {
 
 function DestinationImage({ destination, country, imageUrl }: { destination: string; country: string; imageUrl?: string }) {
   const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
   
-  // Always show the placeholder design for now since API doesn't provide reliable images
+  // Show placeholder if no URL or if image failed to load
+  if (!imageUrl || imageError) {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <MapPin className="w-20 h-20 text-beige-500 opacity-60 mb-2" />
+        <p className="text-beige-600 text-sm font-medium opacity-80">Explore {destination}</p>
+      </div>
+    );
+  }
+  
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center">
-      <MapPin className="w-20 h-20 text-beige-500 opacity-60 mb-2" />
-      <p className="text-beige-600 text-sm font-medium opacity-80">Explore {destination}</p>
-    </div>
+    <>
+      {imageLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <MapPin className="w-20 h-20 text-beige-500 opacity-60 mb-2 animate-pulse" />
+          <p className="text-beige-600 text-sm font-medium opacity-80">Loading...</p>
+        </div>
+      )}
+      <Image 
+        src={imageUrl} 
+        alt={`${destination}, ${country}`}
+        fill
+        className={`object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
+        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+        onLoad={() => setImageLoading(false)}
+        onError={() => {
+          setImageError(true);
+          setImageLoading(false);
+        }}
+        unoptimized
+        priority={false}
+      />
+    </>
   );
 }
 

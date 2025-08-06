@@ -138,6 +138,7 @@ Return this EXACT structure with 10 destinations:
     "destination": "City Name",
     "country": "Country Name",
     "description": "Detailed description of why this destination matches the preferences",
+    "imageUrl": "A publicly accessible, direct-linking HTTPS URL to a high-quality image of this destination. Must be a direct image URL ending in .jpg, .jpeg, .png, or .webp. Prefer royalty-free sources like Unsplash (https://images.unsplash.com/), Pexels (https://images.pexels.com/), or Wikimedia Commons. The URL must be valid and currently working.",
     "estimatedCost": {
       "total": ${Math.floor((budget.min + budget.max) / 2)},
       "breakdown": {
@@ -344,7 +345,9 @@ function parseAndValidateResponse(
       },
       localCuisine: Array.isArray(item.localCuisine) ? item.localCuisine : ['Local specialties'],
       culturalTips: Array.isArray(item.culturalTips) ? item.culturalTips : ['Be respectful of local customs'],
-      images: [] // Removing images as they're not reliably provided by the API
+      images: item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http') 
+        ? [item.imageUrl] 
+        : []
     }))
     
     console.log(`[Perplexity] Successfully parsed ${recommendations.length} destinations`)
